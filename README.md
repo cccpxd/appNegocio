@@ -55,6 +55,8 @@ claro. Sirve para ver la interfaz, no para guardar.
 
 1. Crea un proyecto en https://neon.tech
 2. Abre el **SQL Editor** y pega el contenido de [`sql/001_facturas.sql`](sql/001_facturas.sql).
+   Si la base ya existía, pega también [`sql/002_items_peso.sql`](sql/002_items_peso.sql)
+   (agrega peso y merma a los ítems; es idempotente, se puede correr sin miedo).
 3. Copia la cadena de conexión **del pooler** (la que lleva `-pooler` en el host)
    y pégala en `DATABASE_URL`. Debe terminar en `?sslmode=require`.
 
@@ -151,6 +153,7 @@ backend/
   validacion.py           normalización y validaciones de negocio
 public/index.html         toda la interfaz (CSS y JS incluidos)
 sql/001_facturas.sql      esquema de la base
+sql/002_items_peso.sql    peso y merma para las líneas por kilo
 app.py                    prototipo viejo de Streamlit (no se usa)
 ```
 

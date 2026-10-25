@@ -286,6 +286,32 @@ h3 { font-size: .86rem; margin: 24px 0 10px; text-transform: uppercase; letter-s
 .item-numeros { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .item-numeros input { text-align: right; font-variant-numeric: tabular-nums; padding: 11px 9px; }
 
+.item-acciones { display: flex; align-items: center; gap: 8px; }
+
+.interruptor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .74rem;
+  font-weight: 600;
+  color: var(--tinta-suave);
+  cursor: pointer;
+  user-select: none;
+}
+.interruptor input { width: 16px; height: 16px; accent-color: var(--marca); margin: 0; }
+
+/* Líneas que se cobran por kilo: el total sale de (peso − merma) × precio. */
+.item-peso { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.item-peso[hidden] { display: none; }
+.item-peso input { text-align: right; font-variant-numeric: tabular-nums; padding: 11px 9px; }
+
+.pista-peso {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: .72rem;
+  color: var(--tinta-suave);
+}
+
 .resumen {
   display: flex;
   flex-wrap: wrap;
@@ -540,6 +566,15 @@ function numero(valor) {
   return Number.isInteger(n) ? String(n) : String(redondear(n));
 }
 
+function numeroOpcional(valor) {
+  return valor === null || valor === undefined || valor === "" ? "" : numero(valor);
+}
+
+/* Para los mensajes: 50.5 se lee mejor como 50,5. */
+function numeroLegible(valor) {
+  return numero(valor).replace(".", ",");
+}
+
 function peso(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -779,15 +814,29 @@ function pintarRevision() {
   actualizarEstado();
 }
 
+function esLineaPorPeso(item) {
+  // La IA puede traer peso y unidades a la vez. Manda la fórmula que cuadra.
+  if (!item.peso_kg || !item.precio_unitario) return false;
+  const porUnidades = redondear((item.cantidad || 0) * item.precio_unitario);
+  return Math.abs(porUnidades - item.total_item) > TOLERANCIA;
+}
+
 function agregarItem(item = {}) {
   const contenedor = $("items");
   const fila = document.createElement("div");
   fila.className = "item";
+  const porPeso = esLineaPorPeso(item);
 
   fila.innerHTML = `
     <div class="item-cabecera">
       <span class="item-numero"></span>
-      <button type="button" class="boton-icono" data-quitar aria-label="Quitar ítem">✕</button>
+      <div class="item-acciones">
+        <label class="interruptor">
+          <input type="checkbox" class="por-peso" ${porPeso ? "checked" : ""}>
+          Por peso
+        </label>
+        <button type="button" class="boton-icono" data-quitar aria-label="Quitar ítem">✕</button>
+      </div>
     </div>
     <label class="campo">
       <span>Descripción</span>
@@ -795,7 +844,7 @@ function agregarItem(item = {}) {
     </label>
     <div class="item-numeros">
       <label class="campo">
-        <span>Cantidad</span>
+        <span>Unidades</span>
         <input class="cantidad" type="number" step="0.01" inputmode="decimal" value="${numero(item.cantidad ?? 1)}">
       </label>
       <label class="campo">
@@ -807,20 +856,46 @@ function agregarItem(item = {}) {
         <input class="total_item" type="number" step="0.01" inputmode="decimal" value="${numero(item.total_item)}">
       </label>
     </div>
+    <div class="item-peso" ${porPeso ? "" : "hidden"}>
+      <label class="campo">
+        <span>Peso (kg)</span>
+        <input class="peso" type="number" step="0.001" inputmode="decimal" value="${numeroOpcional(item.peso_kg)}">
+      </label>
+      <label class="campo">
+        <span>Merma (kg)</span>
+        <input class="merma" type="number" step="0.001" inputmode="decimal" value="${numeroOpcional(item.merma_kg)}">
+      </label>
+      <p class="pista-peso">El total se calcula con (peso − merma) × precio.</p>
+    </div>
   `;
 
+  const casillaPeso = fila.querySelector(".por-peso");
+  const bloquePeso = fila.querySelector(".item-peso");
   const cantidad = fila.querySelector(".cantidad");
+  const peso = fila.querySelector(".peso");
+  const merma = fila.querySelector(".merma");
   const precio = fila.querySelector(".precio");
   const totalItem = fila.querySelector(".total_item");
 
   const recalcularLinea = () => {
-    const calculado = monto(cantidad.value) * monto(precio.value);
-    if (Number.isFinite(calculado)) totalItem.value = numero(redondear(calculado));
+    const base = casillaPeso.checked
+      ? Math.max(monto(peso.value) - monto(merma.value), 0)
+      : monto(cantidad.value);
+    // Si todavía no hay peso, no borramos el total que trajo la factura.
+    if (base > 0 && monto(precio.value) > 0) {
+      totalItem.value = numero(redondear(base * monto(precio.value)));
+    }
     actualizarEstado();
   };
 
-  cantidad.addEventListener("input", recalcularLinea);
-  precio.addEventListener("input", recalcularLinea);
+  casillaPeso.addEventListener("change", () => {
+    bloquePeso.hidden = !casillaPeso.checked;
+    recalcularLinea();
+  });
+
+  [cantidad, peso, merma, precio].forEach((campo) => {
+    campo.addEventListener("input", recalcularLinea);
+  });
   totalItem.addEventListener("input", actualizarEstado);
   fila.querySelector(".descripcion").addEventListener("input", actualizarEstado);
 
@@ -845,12 +920,18 @@ function renumerarItems() {
    Revisión: leer, validar y pintar estado
    ========================================================================== */
 function leerFormulario() {
-  const items = Array.from($("items").querySelectorAll(".item")).map((fila) => ({
-    descripcion: fila.querySelector(".descripcion").value.trim(),
-    cantidad: monto(fila.querySelector(".cantidad").value),
-    precio_unitario: monto(fila.querySelector(".precio").value),
-    total_item: monto(fila.querySelector(".total_item").value),
-  }));
+  const items = Array.from($("items").querySelectorAll(".item")).map((fila) => {
+    const porPeso = fila.querySelector(".por-peso").checked;
+    return {
+      descripcion: fila.querySelector(".descripcion").value.trim(),
+      cantidad: monto(fila.querySelector(".cantidad").value),
+      // El peso y la merma solo viajan cuando la línea se cobra por kilo.
+      peso_kg: porPeso ? monto(fila.querySelector(".peso").value) || null : null,
+      merma_kg: porPeso ? monto(fila.querySelector(".merma").value) || null : null,
+      precio_unitario: monto(fila.querySelector(".precio").value),
+      total_item: monto(fila.querySelector(".total_item").value),
+    };
+  });
 
   return {
     proveedor: $("proveedor").value.trim(),
@@ -888,17 +969,34 @@ function validar(datos) {
       problemas.push(`La suma de los ítems da ${pesos.format(sumaItems)} y el subtotal dice ${pesos.format(datos.subtotal)}.`);
     }
 
-    // La misma regla del backend: cada línea tiene que cuadrar sola.
-    // Sin esto la pantalla decía "Todo cuadra" y el servidor igual marcaba revisar.
+    // La misma regla del backend: la línea cuadra por unidades O por peso.
+    // Pollo y carne se cobran por kilo, aunque la factura muestre bultos.
     datos.items.forEach((item) => {
-      if (!item.cantidad || !item.precio_unitario) return;
-      const esperado = redondear(item.cantidad * item.precio_unitario);
-      if (Math.abs(esperado - item.total_item) > TOLERANCIA) {
-        const nombre = item.descripcion.slice(0, 30) || "sin descripción";
-        problemas.push(
-          `Ítem «${nombre}»: ${numero(item.cantidad)} × ${pesos.format(item.precio_unitario)} no da ${pesos.format(item.total_item)}.`
-        );
+      const esperados = [];
+      if (item.cantidad && item.precio_unitario) {
+        esperados.push(redondear(item.cantidad * item.precio_unitario));
       }
+      if (item.peso_kg && item.precio_unitario) {
+        esperados.push(redondear(item.peso_kg * item.precio_unitario));
+        if (item.merma_kg) {
+          esperados.push(redondear((item.peso_kg - item.merma_kg) * item.precio_unitario));
+        }
+      }
+      if (!esperados.length) return;
+      if (esperados.some((esperado) => Math.abs(esperado - item.total_item) <= TOLERANCIA)) {
+        return;
+      }
+
+      const nombre = item.descripcion.slice(0, 30) || "sin descripción";
+      let detalle;
+      if (item.peso_kg) {
+        detalle = item.merma_kg
+          ? `(${numeroLegible(item.peso_kg)} − ${numeroLegible(item.merma_kg)}) kg × ${pesos.format(item.precio_unitario)}`
+          : `${numeroLegible(item.peso_kg)} kg × ${pesos.format(item.precio_unitario)}`;
+      } else {
+        detalle = `${numeroLegible(item.cantidad)} × ${pesos.format(item.precio_unitario)}`;
+      }
+      problemas.push(`Ítem «${nombre}»: ${detalle} no da ${pesos.format(item.total_item)}.`);
     });
   }
 

@@ -81,8 +81,9 @@ update facturas
 """
 
 _INSERTAR_ITEM = """
-insert into items (factura_id, orden, descripcion, cantidad, precio_unitario, total_item)
-values (%s, %s, %s, %s, %s, %s)
+insert into items (factura_id, orden, descripcion, cantidad, peso_kg, merma_kg,
+                   precio_unitario, total_item)
+values (%s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 
@@ -257,7 +258,8 @@ class RepositorioPostgres:
                 return None
 
             cur.execute(
-                """select descripcion, cantidad, precio_unitario, total_item
+                """select descripcion, cantidad, peso_kg, merma_kg,
+                          precio_unitario, total_item
                      from items where factura_id = %s order by orden, id""",
                 (factura_id,),
             )
@@ -292,6 +294,8 @@ def _reemplazar_items(cur: psycopg.Cursor, factura_id: int, datos: DatosFactura)
                 orden,
                 item.descripcion,
                 item.cantidad,
+                item.peso_kg,
+                item.merma_kg,
                 item.precio_unitario,
                 item.total_item,
             )

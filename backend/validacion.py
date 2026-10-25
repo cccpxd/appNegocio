@@ -144,6 +144,14 @@ def _texto_o_none(valor: object) -> str | None:
     return texto or None
 
 
+def _monto_o_none(valor: object) -> float | None:
+    """Un peso de 0 o vacío se guarda como None: esa línea no va por kilos."""
+    if valor is None or valor == "":
+        return None
+    monto = parsear_monto(valor)
+    return monto or None
+
+
 # --------------------------------------------------------------------------
 # Normalizar la respuesta completa de la IA
 # --------------------------------------------------------------------------
@@ -158,12 +166,18 @@ def normalizar_datos(crudo: dict) -> DatosFactura:
 
         descripcion = str(fila.get("descripcion") or "").strip()
         cantidad = parsear_monto(fila.get("cantidad"))
+        peso = _monto_o_none(fila.get("peso_kg"))
         precio = parsear_monto(fila.get("precio_unitario"))
         total = parsear_monto(fila.get("total_item"))
 
         # Si el modelo no trajo el total de la línea, lo calculamos.
-        if total == 0 and cantidad and precio:
-            total = round(cantidad * precio, 2)
+        # Las líneas por peso (pollo, carne) se cobran con el peso, no con
+        # las unidades.
+        if total == 0:
+            if peso and precio:
+                total = round(peso * precio, 2)
+            elif cantidad and precio:
+                total = round(cantidad * precio, 2)
 
         if not descripcion and total == 0:
             continue
@@ -172,6 +186,7 @@ def normalizar_datos(crudo: dict) -> DatosFactura:
             ItemFactura(
                 descripcion=descripcion,
                 cantidad=cantidad,
+                peso_kg=peso,
                 precio_unitario=precio,
                 total_item=total,
             )
@@ -228,15 +243,38 @@ def validar_datos(datos: DatosFactura) -> list[str]:
             )
 
         for item in datos.items:
-            if not item.cantidad or not item.precio_unitario:
+            # La línea cuadra si el total sale de las unidades o del peso.
+            # El peso manda cuando la factura lo trae: pollo y carne se cobran
+            # por kilo, no por bulto.
+            esperados: list[float] = []
+            if item.cantidad and item.precio_unitario:
+                esperados.append(round(item.cantidad * item.precio_unitario, 2))
+            if item.peso_kg and item.precio_unitario:
+                esperados.append(round(item.peso_kg * item.precio_unitario, 2))
+                if item.merma_kg:
+                    esperados.append(
+                        round((item.peso_kg - item.merma_kg) * item.precio_unitario, 2)
+                    )
+
+            if not esperados:
                 continue
-            esperado = round(item.cantidad * item.precio_unitario, 2)
-            if abs(esperado - item.total_item) > TOLERANCIA:
-                nombre = item.descripcion[:30] or "sin descripción"
-                problemas.append(
-                    f"Ítem «{nombre}»: {item.cantidad:g} × {_pesos(item.precio_unitario)} "
-                    f"no da {_pesos(item.total_item)}."
-                )
+            if any(abs(esperado - item.total_item) <= TOLERANCIA for esperado in esperados):
+                continue
+
+            nombre = item.descripcion[:30] or "sin descripción"
+            if item.peso_kg:
+                if item.merma_kg:
+                    detalle = (
+                        f"({_numero(item.peso_kg)} − {_numero(item.merma_kg)}) kg × "
+                        f"{_pesos(item.precio_unitario)}"
+                    )
+                else:
+                    detalle = f"{_numero(item.peso_kg)} kg × {_pesos(item.precio_unitario)}"
+            else:
+                detalle = f"{_numero(item.cantidad)} × {_pesos(item.precio_unitario)}"
+            problemas.append(
+                f"Ítem «{nombre}»: {detalle} no da {_pesos(item.total_item)}."
+            )
 
     return problemas
 
@@ -244,3 +282,8 @@ def validar_datos(datos: DatosFactura) -> list[str]:
 def _pesos(valor: float) -> str:
     """Formatea 1067500.0 como 1.067.500,00."""
     return f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _numero(valor: float) -> str:
+    """Formatea 50.5 como 50,5 y 128.0 como 128."""
+    return f"{valor:g}".replace(".", ",")

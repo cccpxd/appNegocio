@@ -80,6 +80,9 @@ create table if not exists items (
     orden           smallint not null default 0,
     descripcion     text not null default '',
     cantidad        numeric(14, 3) not null default 0,
+    -- Líneas que se cobran por peso (pollo, carne). NULL = se cobra por unidades.
+    peso_kg         numeric(14, 3),
+    merma_kg        numeric(14, 3),
     precio_unitario numeric(14, 2) not null default 0,
     total_item      numeric(14, 2) not null default 0
 );

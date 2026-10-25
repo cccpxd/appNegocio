@@ -27,6 +27,7 @@ ESQUEMA_FACTURA: dict = {
                 "properties": {
                     "descripcion": {"type": "string"},
                     "cantidad": {"type": "number"},
+                    "peso_kg": {"type": "number", "nullable": True},
                     "precio_unitario": {"type": "number"},
                     "total_item": {"type": "number"},
                 },
@@ -58,6 +59,9 @@ PROMPT = (
     "- Montos: solo el número, sin puntos de miles ni símbolos.\n"
     "- nit_rut: el número tal cual, sin puntos de miles.\n"
     "- items: una entrada por línea de la factura. Si no hay detalle, lista vacía.\n"
+    "- cantidad: las unidades o bultos de la línea, tal como aparecen.\n"
+    "- peso_kg: si la línea muestra peso en kilos, ese número. Si no, null.\n"
+    "  No confundas el peso con la cantidad: son columnas distintas.\n"
     "- cufe: solo si está impreso. Si no, null.\n"
     "No inventes datos: si algo no aparece, usa null."
 )

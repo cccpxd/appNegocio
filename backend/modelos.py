@@ -15,7 +15,12 @@ from pydantic import BaseModel, Field
 
 class ItemFactura(BaseModel):
     descripcion: str = ""
+    # Unidades o bultos. En las líneas por peso esto puede venir en 0.
     cantidad: float = 0
+    # Peso en kilos, cuando la factura lo muestra. El total se cobra por esto.
+    peso_kg: float | None = None
+    # Merma en kilos que descuenta el usuario. Nunca la inventa la IA.
+    merma_kg: float | None = None
     precio_unitario: float = 0
     total_item: float = 0
 
