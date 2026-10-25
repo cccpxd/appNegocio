@@ -1,0 +1,10 @@
+# Dependencias del backend (FastAPI + Gemini + Postgres).
+# Vercel instala esto en cada despliegue.
+
+fastapi>=0.117,<1.0
+uvicorn>=0.34
+python-multipart>=0.0.20
+pillow>=13.0
+google-genai>=2.33,<3.0
+python-dotenv>=1.0
+psycopg[binary]>=3.2

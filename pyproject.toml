@@ -1,0 +1,22 @@
+[project]
+name = "lector-facturas"
+version = "1.0.0"
+description = "Foto de factura colombiana → datos ordenados, con Gemini."
+requires-python = ">=3.12"
+
+# Las mismas versiones de requirements.txt. Vercel prefiere pyproject.toml
+# cuando existe, así que tienen que estar en los dos lados.
+dependencies = [
+    "fastapi>=0.117,<1.0",
+    "uvicorn>=0.34",
+    "python-multipart>=0.0.20",
+    "pillow>=13.0",
+    "google-genai>=2.33,<3.0",
+    "python-dotenv>=1.0",
+    "psycopg[binary]>=3.2",
+]
+
+[tool.vercel]
+# `app.py` en la raíz es el prototipo viejo de Streamlit. Sin esta línea,
+# Vercel lo toma como entrypoint y el despliegue no arranca.
+entrypoint = "api/index:app"

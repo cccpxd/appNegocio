@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Lector de facturas</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%BE%3C/text%3E%3C/svg%3E">
+<style>
+/* ==========================================================================
+   1. Base
+   ========================================================================== */
+:root {
+  --fondo: #f3f5f2;
+  --tarjeta: #ffffff;
+  --tinta: #12202e;
+  --tinta-suave: #63707f;
+  --borde: #e3e8e5;
+  --marca: #0f766e;
+  --marca-fuerte: #115e59;
+  --ok: #15803d;
+  --ok-suave: #e8f7ed;
+  --alerta: #a16207;
+  --alerta-suave: #fdf4e3;
+  --error: #b91c1c;
+  --error-suave: #fdecec;
+  --radio: 18px;
+  --sombra: 0 1px 2px rgba(18, 32, 46, .04), 0 10px 26px -14px rgba(18, 32, 46, .22);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { margin: 0; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(1100px 520px at 50% -12%, #e6f0ec 0%, rgba(230, 240, 236, 0) 70%),
+    var(--fondo);
+  color: var(--tinta);
+  min-height: 100dvh;
+  padding: 22px 16px calc(32px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 540px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ==========================================================================
+   2. Cabecera
+   ========================================================================== */
+.cabecera { display: flex; align-items: center; gap: 12px; padding: 2px 4px 6px; }
+
+.logo {
+  width: 46px; height: 46px; flex: none;
+  border-radius: 15px;
+  display: grid; place-items: center;
+  color: #fff;
+  background: linear-gradient(145deg, #14b8a6, #0f766e);
+  box-shadow: 0 10px 22px -12px rgba(15, 118, 110, .95);
+}
+
+.cabecera h1 { font-size: 1.12rem; margin: 0; letter-spacing: -.01em; }
+.cabecera p { margin: 3px 0 0; font-size: .82rem; color: var(--tinta-suave); }
+
+/* ==========================================================================
+   3. Tarjetas y tipografía
+   ========================================================================== */
+.tarjeta {
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 18px;
+  box-shadow: var(--sombra);
+}
+
+h2 { font-size: 1.02rem; margin: 0; letter-spacing: -.01em; }
+h3 { font-size: .86rem; margin: 24px 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-suave); }
+
+.pista { font-size: .78rem; color: var(--tinta-suave); margin: 12px 0 0; line-height: 1.45; }
+.centro { text-align: center; }
+
+/* ==========================================================================
+   4. Zona de captura
+   ========================================================================== */
+.zona {
+  border: 1.5px dashed #c8d6d1;
+  border-radius: 15px;
+  padding: 26px 18px;
+  text-align: center;
+  background: linear-gradient(180deg, #fbfdfc, #f5faf8);
+  color: var(--marca);
+}
+
+.zona-titulo { margin: 10px 0 4px; font-weight: 650; color: var(--tinta); font-size: .98rem; }
+.zona-ayuda { margin: 0; font-size: .82rem; color: var(--tinta-suave); }
+
+/* ==========================================================================
+   5. Botones
+   ========================================================================== */
+.boton {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 13px;
+  padding: 14px 18px;
+  font: inherit;
+  font-size: .94rem;
+  font-weight: 650;
+  text-align: center;
+  cursor: pointer;
+  transition: transform .12s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.boton:active { transform: scale(.985); }
+
+.boton-primario {
+  background: var(--marca);
+  color: #fff;
+  box-shadow: 0 12px 22px -14px rgba(15, 118, 110, 1);
+}
+.boton-primario:hover { background: var(--marca-fuerte); }
+.boton-primario:disabled { background: #9db8b4; box-shadow: none; cursor: progress; }
+
+.boton-suave { background: #eef2f0; color: var(--tinta); }
+.boton-suave:hover { background: #e3eae7; }
+
+.boton-mini { width: auto; padding: 10px 14px; font-size: .85rem; border-radius: 11px; }
+
+.acciones { display: grid; gap: 10px; margin-top: 16px; }
+@media (min-width: 430px) {
+  .acciones { grid-template-columns: 1fr 1fr; }
+}
+
+/* ==========================================================================
+   6. Previa y estados
+   ========================================================================== */
+.previa {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 13px;
+  border: 1px solid var(--borde);
+  background: #f8faf9;
+}
+
+.datos-compresion { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+
+.pildora {
+  font-size: .74rem;
+  color: var(--tinta-suave);
+  background: #f1f5f3;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.spinner {
+  width: 34px; height: 34px;
+  margin: 8px auto 16px;
+  border-radius: 50%;
+  border: 3px solid #dfe9e5;
+  border-top-color: var(--marca);
+  animation: girar .9s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.aviso-error { border-color: #f3d0d0; background: #fffafa; }
+.aviso-error h2 { color: var(--error); }
+
+.aviso-duplicado {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--ok-suave);
+  color: #14532d;
+  font-size: .83rem;
+  line-height: 1.45;
+}
+
+/* ==========================================================================
+   7. Revisión
+   ========================================================================== */
+.cabecera-revision { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.insignia {
+  font-size: .73rem;
+  font-weight: 750;
+  letter-spacing: .02em;
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.insignia-ok { background: var(--ok-suave); color: var(--ok); }
+.insignia-revisar { background: var(--alerta-suave); color: var(--alerta); }
+
+.problemas {
+  margin: 13px 0 0;
+  padding: 12px 14px 12px 30px;
+  border-radius: 12px;
+  background: var(--alerta-suave);
+  color: #7c4a09;
+  font-size: .83rem;
+  line-height: 1.45;
+  display: grid;
+  gap: 6px;
+}
+.problemas:empty { display: none; }
+
+.campo { display: grid; gap: 5px; }
+
+.campo > span {
+  font-size: .71rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--tinta-suave);
+}
+
+.campo input {
+  width: 100%;
+  font: inherit;
+  font-size: .95rem;
+  color: var(--tinta);
+  background: #fbfcfb;
+  border: 1px solid var(--borde);
+  border-radius: 11px;
+  padding: 11px 12px;
+}
+.campo input:focus {
+  outline: 2px solid rgba(15, 118, 110, .3);
+  outline-offset: 1px;
+  border-color: var(--marca);
+  background: #fff;
+}
+
+.grilla-2 { display: grid; gap: 12px; margin-top: 14px; }
+@media (min-width: 430px) { .grilla-2 { grid-template-columns: 1fr 1fr; } }
+
+.grilla-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; margin-top: 14px; }
+.grilla-3 input { text-align: right; font-variant-numeric: tabular-nums; padding: 11px 9px; }
+
+/* Ítems */
+.items { display: grid; gap: 10px; }
+
+.item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: #fcfdfc;
+}
+
+.item-cabecera { display: flex; align-items: center; justify-content: space-between; }
+
+.item-numero {
+  font-size: .71rem;
+  font-weight: 700;
+  color: var(--tinta-suave);
+  background: #eef2f0;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.boton-icono {
+  border: 0;
+  background: transparent;
+  color: #9aa7b2;
+  font: inherit;
+  font-size: .9rem;
+  line-height: 1;
+  padding: 5px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.boton-icono:hover { background: var(--error-suave); color: var(--error); }
+
+.item-numeros { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.item-numeros input { text-align: right; font-variant-numeric: tabular-nums; padding: 11px 9px; }
+
+.resumen {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: #f5f8f6;
+  font-size: .79rem;
+  color: var(--tinta-suave);
+}
+.resumen strong { color: var(--tinta); font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   8. Acciones finales y aviso flotante
+   ========================================================================== */
+.acciones-finales {
+  position: sticky;
+  bottom: 10px;
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 10px;
+  border: 1px solid var(--borde);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+@media (min-width: 430px) {
+  .acciones-finales { grid-template-columns: 1.4fr 1fr; }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(92vw, 430px);
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #12202e;
+  color: #fff;
+  font-size: .85rem;
+  line-height: 1.4;
+  box-shadow: 0 16px 34px -12px rgba(0, 0, 0, .55);
+  animation: subir .18s ease-out;
+}
+.toast-error { background: #7f1d1d; }
+@keyframes subir { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+.pie { text-align: center; font-size: .74rem; color: #8a97a4; padding: 4px 0 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Cabecera -->
+  <header class="cabecera">
+    <div class="logo" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 7.5h2.2l1.2-2h9.2l1.2 2H20a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1Z"/>
+        <circle cx="12" cy="13" r="3.4"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Lector de facturas</h1>
+      <p>Foto → datos ordenados, sin digitar</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- Paso 1: elegir foto -->
+    <section id="paso-elegir" class="tarjeta">
+      <div class="zona">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 8.5h2.4L6.7 6h10.6l1.3 2.5H21a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/>
+          <circle cx="12" cy="13.4" r="3.6"/>
+        </svg>
+        <p class="zona-titulo">Toma la foto de la factura</p>
+        <p class="zona-ayuda">Que salga completa y con buena luz.</p>
+      </div>
+
+      <div class="acciones">
+        <label class="boton boton-primario">
+          Tomar foto
+          <input id="camara" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <label class="boton boton-suave">
+          Elegir imagen
+          <input id="galeria" type="file" accept="image/*" hidden>
+        </label>
+      </div>
+
+      <p class="pista centro">La foto se comprime en tu teléfono antes de subirla. Así gastamos menos datos y menos IA.</p>
+    </section>
+
+    <!-- Paso 2: previa -->
+    <section id="paso-previa" class="tarjeta" hidden>
+      <img id="previa" class="previa" alt="Factura lista para leer">
+      <div class="datos-compresion" id="datos-compresion"></div>
+      <div class="acciones">
+        <button id="btn-leer" class="boton boton-primario" type="button">Leer con IA</button>
+        <button id="btn-cambiar" class="boton boton-suave" type="button">Cambiar foto</button>
+      </div>
+    </section>
+
+    <!-- Leyendo -->
+    <section id="paso-cargando" class="tarjeta centro" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p style="margin:0;font-weight:600">Leyendo la factura…</p>
+      <p class="pista">Una sola llamada a la IA. En modo Flex puede tardar un minuto.</p>
+    </section>
+
+    <!-- En cola -->
+    <section id="paso-cola" class="tarjeta centro" hidden>
+      <div style="font-size:2.6rem;line-height:1" aria-hidden="true">⏳</div>
+      <h2>Quedó en la cola</h2>
+      <p class="pista">La guardé sin gastar IA todavía. Puedes cerrar la pestaña: la próxima corrida la lee sola.</p>
+      <div class="acciones">
+        <button id="btn-revisar-cola" class="boton boton-primario" type="button">Ver si ya está</button>
+        <button id="btn-otra-cola" class="boton boton-suave" type="button">Otra factura</button>
+      </div>
+    </section>
+
+    <!-- Error -->
+    <section id="paso-error" class="tarjeta aviso-error" hidden>
+      <h2>No pude leer la factura</h2>
+      <p id="texto-error" class="pista" style="font-size:.86rem"></p>
+      <div class="acciones">
+        <button id="btn-reintentar" class="boton boton-primario" type="button">Intentar de nuevo</button>
+        <button id="btn-otra-error" class="boton boton-suave" type="button">Otra factura</button>
+      </div>
+    </section>
+
+    <!-- Paso 3: revisión -->
+    <section id="paso-revision" class="tarjeta" hidden>
+      <div class="cabecera-revision">
+        <h2>Revisa los datos</h2>
+        <span id="insignia-estado" class="insignia insignia-ok">Todo cuadra</span>
+      </div>
+
+      <p id="aviso-duplicado" class="aviso-duplicado" hidden>
+        Esta factura ya estaba guardada. No gastamos IA esta vez.
+      </p>
+
+      <ul id="lista-problemas" class="problemas"></ul>
+
+      <form id="form-factura" autocomplete="off">
+        <div class="grilla-2">
+          <label class="campo">
+            <span>Proveedor</span>
+            <input id="proveedor" type="text" placeholder="Nombre del negocio">
+          </label>
+          <label class="campo">
+            <span>NIT</span>
+            <input id="nit" type="text" inputmode="numeric" placeholder="900123456-7">
+          </label>
+          <label class="campo">
+            <span>Número de factura</span>
+            <input id="numero" type="text" placeholder="FV-0001">
+          </label>
+          <label class="campo">
+            <span>Fecha</span>
+            <input id="fecha" type="date">
+          </label>
+        </div>
+
+        <label class="campo" style="margin-top:12px">
+          <span>CUFE (opcional)</span>
+          <input id="cufe" type="text" placeholder="Solo si aparece en la factura">
+        </label>
+
+        <div class="grilla-3">
+          <label class="campo">
+            <span>Subtotal</span>
+            <input id="subtotal" type="number" step="0.01" inputmode="decimal">
+          </label>
+          <label class="campo">
+            <span>IVA</span>
+            <input id="iva" type="number" step="0.01" inputmode="decimal">
+          </label>
+          <label class="campo">
+            <span>Total</span>
+            <input id="total" type="number" step="0.01" inputmode="decimal">
+          </label>
+        </div>
+
+        <h3>Ítems</h3>
+        <div id="items" class="items"></div>
+        <button id="btn-agregar-item" class="boton boton-suave boton-mini" type="button" style="margin-top:10px">+ Agregar ítem</button>
+
+        <div id="resumen" class="resumen"></div>
+      </form>
+
+      <div class="acciones-finales">
+        <button id="btn-guardar" class="boton boton-primario" type="button">Guardar factura</button>
+        <button id="btn-otra" class="boton boton-suave" type="button">Otra factura</button>
+      </div>
+
+      <p class="pista centro" id="nota-tokens"></p>
+      <p class="pista centro" id="nota-fase">La imagen se borra de la base apenas termina el proceso.</p>
+    </section>
+  </main>
+
+  <footer class="pie">Los datos salen de tu foto. La IA no se llama dos veces por la misma factura.</footer>
+</div>
+
+<div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
+<script>
+/* ==========================================================================
+   Configuración
+   ========================================================================== */
+const LADO_MAXIMO = 1600;          // píxeles del lado largo
+const CALIDAD_INICIAL = 0.72;      // JPEG del navegador
+const PESO_OBJETIVO = 1_400_000;   // 1.4 MB, bien por debajo del límite de Vercel
+const TOLERANCIA = 1;              // un peso de diferencia es redondeo
+const ESPERA_ENTRE_INTENTOS = 4000; // ms entre consultas al worker
+const INTENTOS_POLLING = 3;         // 3 × 4 s = 12 s de paciencia
+
+/* Estado de la pantalla */
+let archivoListo = null;   // { blob, ancho, alto, calidad, original }
+let actual = null;         // { id, estado, datos, problemas, tokens, duplicado }
+let urlPrevia = null;      // para liberar memoria
+
+const $ = (id) => document.getElementById(id);
+
+/* ==========================================================================
+   Utilidades
+   ========================================================================== */
+const pesos = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 2,
+});
+
+function monto(valor) {
+  const numero = Number(String(valor).replace(",", "."));
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function redondear(valor) {
+  return Math.round(valor * 100) / 100;
+}
+
+function numero(valor) {
+  const n = Number(valor ?? 0);
+  if (!Number.isFinite(n)) return "0";
+  return Number.isInteger(n) ? String(n) : String(redondear(n));
+}
+
+function peso(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function escapar(texto) {
+  const mapa = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return String(texto ?? "").replace(/[&<>"']/g, (c) => mapa[c]);
+}
+
+let temporizadorAviso = null;
+function avisar(texto, esError = false) {
+  const caja = $("toast");
+  caja.textContent = texto;
+  caja.classList.toggle("toast-error", esError);
+  caja.hidden = false;
+  clearTimeout(temporizadorAviso);
+  temporizadorAviso = setTimeout(() => { caja.hidden = true; }, 5000);
+}
+
+/* ==========================================================================
+   Pasos de la pantalla
+   ========================================================================== */
+function mostrarPaso(nombre) {
+  ["elegir", "previa", "cargando", "cola", "error", "revision"].forEach((paso) => {
+    $("paso-" + paso).hidden = paso !== nombre;
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+/* ==========================================================================
+   Compresión en el navegador
+   ========================================================================== */
+async function abrirImagen(archivo) {
+  if ("createImageBitmap" in window) {
+    try {
+      return await createImageBitmap(archivo, { imageOrientation: "from-image" });
+    } catch (error) {
+      /* Safari viejo: seguimos con el método clásico */
+    }
+  }
+  return new Promise((ok, mal) => {
+    const url = URL.createObjectURL(archivo);
+    const imagen = new Image();
+    imagen.onload = () => { URL.revokeObjectURL(url); ok(imagen); };
+    imagen.onerror = () => { URL.revokeObjectURL(url); mal(new Error("No pude abrir la imagen.")); };
+    imagen.src = url;
+  });
+}
+
+function aJpeg(lienzo, calidad) {
+  return new Promise((ok, mal) => {
+    lienzo.toBlob(
+      (blob) => (blob ? ok(blob) : mal(new Error("Falló la compresión de la foto."))),
+      "image/jpeg",
+      calidad,
+    );
+  });
+}
+
+async function comprimir(archivo) {
+  const imagen = await abrirImagen(archivo);
+  const anchoOriginal = imagen.width || imagen.naturalWidth;
+  const altoOriginal = imagen.height || imagen.naturalHeight;
+
+  const escala = Math.min(1, LADO_MAXIMO / Math.max(anchoOriginal, altoOriginal));
+  const lienzo = document.createElement("canvas");
+  lienzo.width = Math.max(1, Math.round(anchoOriginal * escala));
+  lienzo.height = Math.max(1, Math.round(altoOriginal * escala));
+
+  const contexto = lienzo.getContext("2d");
+  contexto.imageSmoothingQuality = "high";
+  contexto.drawImage(imagen, 0, 0, lienzo.width, lienzo.height);
+
+  let calidad = CALIDAD_INICIAL;
+  let blob = await aJpeg(lienzo, calidad);
+  while (blob.size > PESO_OBJETIVO && calidad > 0.45) {
+    calidad = redondear(calidad - 0.1);
+    blob = await aJpeg(lienzo, calidad);
+  }
+
+  if (imagen.close) imagen.close();
+
+  return {
+    blob,
+    ancho: lienzo.width,
+    alto: lienzo.height,
+    calidad,
+    original: archivo.size,
+  };
+}
+
+/* ==========================================================================
+   Llamadas al backend
+   ========================================================================== */
+async function pedir(ruta, opciones) {
+  const respuesta = await fetch(ruta, opciones);
+  let cuerpo = null;
+  try { cuerpo = await respuesta.json(); } catch (error) { /* respuesta sin JSON */ }
+
+  if (!respuesta.ok) {
+    const detalle = cuerpo && cuerpo.detail;
+    const mensaje = typeof detalle === "string" ? detalle : `Error ${respuesta.status}.`;
+    const fallo = new Error(mensaje);
+    fallo.status = respuesta.status;
+    throw fallo;
+  }
+  return cuerpo;
+}
+
+async function leerFactura() {
+  if (!archivoListo) return;
+  mostrarPaso("cargando");
+
+  const formulario = new FormData();
+  formulario.append("archivo", archivoListo.blob, "factura.jpg");
+
+  try {
+    // 1) Encolar: responde al instante, sin IA.
+    const encolada = await pedir("/procesar", { method: "POST", body: formulario });
+    actual = encolada; // { id, estado, duplicado }
+    // 2) Empujar el worker mientras el usuario espera.
+    await esperarFactura(INTENTOS_POLLING);
+  } catch (error) {
+    $("texto-error").textContent = error.message;
+    mostrarPaso("error");
+  }
+}
+
+async function esperarFactura(intentos) {
+  for (let intento = 0; intento < intentos; intento += 1) {
+    const estado = await pedir(`/facturas/${actual.id}/procesar`, { method: "POST" });
+    actual = { ...actual, ...estado };
+
+    if (estado.estado === "ok" || estado.estado === "revisar") {
+      pintarRevision();
+      mostrarPaso("revision");
+      return;
+    }
+
+    if (estado.estado === "error") {
+      $("texto-error").textContent =
+        estado.error || "La IA no pudo con esta factura.";
+      mostrarPaso("error");
+      return;
+    }
+
+    if (intento < intentos - 1) await dormir(ESPERA_ENTRE_INTENTOS);
+  }
+
+  // Sigue en la cola: no lo dejamos esperando de pie.
+  mostrarPaso("cola");
+}
+
+async function reintentarCola() {
+  if (!actual || !actual.id) {
+    empezarDeCero();
+    return;
+  }
+  mostrarPaso("cargando");
+  try {
+    await esperarFactura(INTENTOS_POLLING + 2);
+  } catch (error) {
+    $("texto-error").textContent = error.message;
+    mostrarPaso("error");
+  }
+}
+
+async function guardarFactura() {
+  const datos = leerFormulario();
+  const problemas = validar(datos);
+
+  if (problemas.length) {
+    const seguir = confirm(
+      `Hay ${problemas.length} dato(s) que no cuadran.\n\n` +
+      "Se guardará marcada como «revisar».\n\n¿Seguimos?"
+    );
+    if (!seguir) return;
+  }
+
+  const boton = $("btn-guardar");
+  boton.disabled = true;
+  boton.textContent = "Guardando…";
+
+  try {
+    const guardada = await pedir("/guardar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: actual.id, datos }),
+    });
+    actual.estado = guardada.estado;
+    avisar(
+      guardada.estado === "ok"
+        ? "Factura guardada. Todo cuadra."
+        : "Guardada, marcada para revisar."
+    );
+  } catch (error) {
+    avisar(error.message, true);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Guardar factura";
+  }
+}
+
+/* ==========================================================================
+   Revisión: pintar datos
+   ========================================================================== */
+function pintarRevision() {
+  const datos = actual.datos;
+
+  $("proveedor").value = datos.proveedor || "";
+  $("nit").value = datos.nit_rut || "";
+  $("numero").value = datos.numero_factura || "";
+  $("fecha").value = datos.fecha || "";
+  $("cufe").value = datos.cufe || "";
+  $("subtotal").value = numero(datos.subtotal);
+  $("iva").value = numero(datos.iva);
+  $("total").value = numero(datos.total);
+
+  $("items").innerHTML = "";
+  (datos.items || []).forEach((item) => agregarItem(item));
+
+  $("aviso-duplicado").hidden = !actual.duplicado;
+  $("nota-tokens").textContent = actual.tokens
+    ? `La IA gastó ${actual.tokens} tokens en esta factura.`
+    : "";
+
+  actualizarEstado();
+}
+
+function agregarItem(item = {}) {
+  const contenedor = $("items");
+  const fila = document.createElement("div");
+  fila.className = "item";
+
+  fila.innerHTML = `
+    <div class="item-cabecera">
+      <span class="item-numero"></span>
+      <button type="button" class="boton-icono" data-quitar aria-label="Quitar ítem">✕</button>
+    </div>
+    <label class="campo">
+      <span>Descripción</span>
+      <input class="descripcion" type="text" placeholder="Producto o servicio" value="${escapar(item.descripcion)}">
+    </label>
+    <div class="item-numeros">
+      <label class="campo">
+        <span>Cantidad</span>
+        <input class="cantidad" type="number" step="0.01" inputmode="decimal" value="${numero(item.cantidad ?? 1)}">
+      </label>
+      <label class="campo">
+        <span>Precio unit.</span>
+        <input class="precio" type="number" step="0.01" inputmode="decimal" value="${numero(item.precio_unitario)}">
+      </label>
+      <label class="campo">
+        <span>Total</span>
+        <input class="total_item" type="number" step="0.01" inputmode="decimal" value="${numero(item.total_item)}">
+      </label>
+    </div>
+  `;
+
+  const cantidad = fila.querySelector(".cantidad");
+  const precio = fila.querySelector(".precio");
+  const totalItem = fila.querySelector(".total_item");
+
+  const recalcularLinea = () => {
+    const calculado = monto(cantidad.value) * monto(precio.value);
+    if (Number.isFinite(calculado)) totalItem.value = numero(redondear(calculado));
+    actualizarEstado();
+  };
+
+  cantidad.addEventListener("input", recalcularLinea);
+  precio.addEventListener("input", recalcularLinea);
+  totalItem.addEventListener("input", actualizarEstado);
+  fila.querySelector(".descripcion").addEventListener("input", actualizarEstado);
+
+  fila.querySelector("[data-quitar]").addEventListener("click", () => {
+    fila.remove();
+    renumerarItems();
+    actualizarEstado();
+  });
+
+  contenedor.appendChild(fila);
+  renumerarItems();
+}
+
+function renumerarItems() {
+  const filas = $("items").querySelectorAll(".item");
+  filas.forEach((fila, indice) => {
+    fila.querySelector(".item-numero").textContent = `Ítem ${indice + 1}`;
+  });
+}
+
+/* ==========================================================================
+   Revisión: leer, validar y pintar estado
+   ========================================================================== */
+function leerFormulario() {
+  const items = Array.from($("items").querySelectorAll(".item")).map((fila) => ({
+    descripcion: fila.querySelector(".descripcion").value.trim(),
+    cantidad: monto(fila.querySelector(".cantidad").value),
+    precio_unitario: monto(fila.querySelector(".precio").value),
+    total_item: monto(fila.querySelector(".total_item").value),
+  }));
+
+  return {
+    proveedor: $("proveedor").value.trim(),
+    nit_rut: $("nit").value.trim(),
+    numero_factura: $("numero").value.trim(),
+    cufe: $("cufe").value.trim() || null,
+    fecha: $("fecha").value || null,
+    subtotal: monto($("subtotal").value),
+    iva: monto($("iva").value),
+    total: monto($("total").value),
+    items,
+  };
+}
+
+/* Las mismas reglas del backend, para avisar mientras el usuario escribe. */
+function validar(datos) {
+  const problemas = [];
+
+  if (!datos.proveedor) problemas.push("Falta el nombre del proveedor.");
+  if (!datos.numero_factura) problemas.push("Falta el número de factura.");
+  if (!datos.nit_rut) problemas.push("Falta el NIT.");
+  if (!datos.fecha) problemas.push("Falta la fecha.");
+  if (datos.total <= 0) problemas.push("El total es cero o negativo.");
+
+  const sumaTotal = redondear(datos.subtotal + datos.iva);
+  if (Math.abs(sumaTotal - datos.total) > TOLERANCIA) {
+    problemas.push(`Subtotal + IVA da ${pesos.format(sumaTotal)} y el total dice ${pesos.format(datos.total)}.`);
+  }
+
+  if (!datos.items.length) {
+    problemas.push("No hay ítems.");
+  } else {
+    const sumaItems = redondear(datos.items.reduce((total, item) => total + item.total_item, 0));
+    if (Math.abs(sumaItems - datos.subtotal) > TOLERANCIA) {
+      problemas.push(`La suma de los ítems da ${pesos.format(sumaItems)} y el subtotal dice ${pesos.format(datos.subtotal)}.`);
+    }
+  }
+
+  return problemas;
+}
+
+function actualizarEstado() {
+  const datos = leerFormulario();
+  const problemas = validar(datos);
+
+  const insignia = $("insignia-estado");
+  insignia.className = "insignia " + (problemas.length ? "insignia-revisar" : "insignia-ok");
+  insignia.textContent = problemas.length ? `Revisar (${problemas.length})` : "Todo cuadra";
+
+  const lista = $("lista-problemas");
+  lista.innerHTML = "";
+  problemas.forEach((problema) => {
+    const punto = document.createElement("li");
+    punto.textContent = problema;
+    lista.appendChild(punto);
+  });
+
+  const sumaItems = redondear(datos.items.reduce((total, item) => total + item.total_item, 0));
+  $("resumen").innerHTML =
+    `<span>Ítems: <strong>${pesos.format(sumaItems)}</strong></span>` +
+    `<span>Subtotal + IVA: <strong>${pesos.format(redondear(datos.subtotal + datos.iva))}</strong></span>` +
+    `<span>Total: <strong>${pesos.format(datos.total)}</strong></span>`;
+}
+
+/* ==========================================================================
+   Flujo
+   ========================================================================== */
+async function alElegirArchivo(evento) {
+  const archivo = evento.target.files && evento.target.files[0];
+  evento.target.value = ""; // permite volver a elegir el mismo archivo
+  if (!archivo) return;
+
+  if (!archivo.type.startsWith("image/")) {
+    avisar("Ese archivo no es una imagen.", true);
+    return;
+  }
+
+  try {
+    archivoListo = await comprimir(archivo);
+
+    if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+    urlPrevia = URL.createObjectURL(archivoListo.blob);
+    $("previa").src = urlPrevia;
+
+    $("datos-compresion").innerHTML = [
+      `${archivoListo.ancho} × ${archivoListo.alto} px`,
+      peso(archivoListo.blob.size),
+      `calidad ${Math.round(archivoListo.calidad * 100)}%`,
+    ].map((texto) => `<span class="pildora">${texto}</span>`).join("");
+
+    mostrarPaso("previa");
+  } catch (error) {
+    avisar(error.message || "No pude preparar la imagen.", true);
+  }
+}
+
+function empezarDeCero() {
+  actual = null;
+  archivoListo = null;
+  if (urlPrevia) {
+    URL.revokeObjectURL(urlPrevia);
+    urlPrevia = null;
+  }
+  $("previa").removeAttribute("src");
+  $("items").innerHTML = "";
+  $("lista-problemas").innerHTML = "";
+  mostrarPaso("elegir");
+}
+
+/* ==========================================================================
+   Eventos
+   ========================================================================== */
+$("camara").addEventListener("change", alElegirArchivo);
+$("galeria").addEventListener("change", alElegirArchivo);
+$("btn-leer").addEventListener("click", leerFactura);
+$("btn-cambiar").addEventListener("click", empezarDeCero);
+$("btn-reintentar").addEventListener("click", () => (archivoListo ? mostrarPaso("previa") : empezarDeCero()));
+$("btn-otra-error").addEventListener("click", empezarDeCero);
+$("btn-revisar-cola").addEventListener("click", reintentarCola);
+$("btn-otra-cola").addEventListener("click", empezarDeCero);
+$("btn-agregar-item").addEventListener("click", () => agregarItem());
+$("btn-guardar").addEventListener("click", guardarFactura);
+$("btn-otra").addEventListener("click", empezarDeCero);
+
+/* Los totales se recalculan mientras el usuario escribe. */
+["subtotal", "iva", "total", "proveedor", "nit", "numero", "fecha"].forEach((id) => {
+  $(id).addEventListener("input", actualizarEstado);
+});
+</script>
+</body>
+</html>
