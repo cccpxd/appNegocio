@@ -734,11 +734,17 @@ async function guardarFactura() {
       body: JSON.stringify({ id: actual.id, datos }),
     });
     actual.estado = guardada.estado;
-    avisar(
-      guardada.estado === "ok"
-        ? "Factura guardada. Todo cuadra."
-        : "Guardada, marcada para revisar."
-    );
+    actual.problemas = guardada.problemas || [];
+
+    // El servidor manda: si encontró algo que la pantalla no vio, se muestra.
+    pintarProblemas(actual.problemas);
+
+    if (guardada.estado === "ok") {
+      avisar("Factura guardada. Todo cuadra.");
+    } else {
+      const primero = actual.problemas[0] || "hay datos que no cuadran";
+      avisar(`Guardada para revisar: ${primero}`, true);
+    }
   } catch (error) {
     avisar(error.message, true);
   } finally {
@@ -881,15 +887,25 @@ function validar(datos) {
     if (Math.abs(sumaItems - datos.subtotal) > TOLERANCIA) {
       problemas.push(`La suma de los ítems da ${pesos.format(sumaItems)} y el subtotal dice ${pesos.format(datos.subtotal)}.`);
     }
+
+    // La misma regla del backend: cada línea tiene que cuadrar sola.
+    // Sin esto la pantalla decía "Todo cuadra" y el servidor igual marcaba revisar.
+    datos.items.forEach((item) => {
+      if (!item.cantidad || !item.precio_unitario) return;
+      const esperado = redondear(item.cantidad * item.precio_unitario);
+      if (Math.abs(esperado - item.total_item) > TOLERANCIA) {
+        const nombre = item.descripcion.slice(0, 30) || "sin descripción";
+        problemas.push(
+          `Ítem «${nombre}»: ${numero(item.cantidad)} × ${pesos.format(item.precio_unitario)} no da ${pesos.format(item.total_item)}.`
+        );
+      }
+    });
   }
 
   return problemas;
 }
 
-function actualizarEstado() {
-  const datos = leerFormulario();
-  const problemas = validar(datos);
-
+function pintarProblemas(problemas) {
   const insignia = $("insignia-estado");
   insignia.className = "insignia " + (problemas.length ? "insignia-revisar" : "insignia-ok");
   insignia.textContent = problemas.length ? `Revisar (${problemas.length})` : "Todo cuadra";
@@ -901,6 +917,11 @@ function actualizarEstado() {
     punto.textContent = problema;
     lista.appendChild(punto);
   });
+}
+
+function actualizarEstado() {
+  const datos = leerFormulario();
+  pintarProblemas(validar(datos));
 
   const sumaItems = redondear(datos.items.reduce((total, item) => total + item.total_item, 0));
   $("resumen").innerHTML =

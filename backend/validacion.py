@@ -234,7 +234,7 @@ def validar_datos(datos: DatosFactura) -> list[str]:
             if abs(esperado - item.total_item) > TOLERANCIA:
                 nombre = item.descripcion[:30] or "sin descripción"
                 problemas.append(
-                    f"Ítem «{nombre}»: {item.cantidad} × {_pesos(item.precio_unitario)} "
+                    f"Ítem «{nombre}»: {item.cantidad:g} × {_pesos(item.precio_unitario)} "
                     f"no da {_pesos(item.total_item)}."
                 )
 
